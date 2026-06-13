@@ -8,22 +8,26 @@ import (
 )
 
 type Config struct {
-	AppName     string
-	Environment string
-	Port        string
-	CORSOrigins []string
-	DatabaseURL string
+	AppName      string
+	Environment  string
+	Port         string
+	CORSOrigins  []string
+	DatabaseURL  string
+	JWTSecret    string
+	JWTExpiresIn string
 }
 
 func Load() Config {
 	_ = godotenv.Load()
 
 	return Config{
-		AppName:     getEnv("APP_NAME", "ReSy API"),
-		Environment: getEnv("APP_ENV", "development"),
-		Port:        getEnv("APP_PORT", "8080"),
-		CORSOrigins: splitEnv("CORS_ORIGINS", "http://localhost:5173"),
-		DatabaseURL: getEnv("DATABASE_URL", ""),
+		AppName:      getEnv("APP_NAME", "ReSy API"),
+		Environment:  getEnv("APP_ENV", "development"),
+		Port:         getEnv("APP_PORT", "8080"),
+		CORSOrigins:  splitEnv("CORS_ORIGINS", "http://localhost:5173"),
+		DatabaseURL:  getEnv("DATABASE_URL", ""),
+		JWTSecret:    getEnv("JWT_SECRET", "change-me-dev-secret"),
+		JWTExpiresIn: getEnv("JWT_EXPIRES_IN", "24h"),
 	}
 }
 

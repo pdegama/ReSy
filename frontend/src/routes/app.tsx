@@ -1,71 +1,48 @@
-import { useEffect } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  Activity,
-  Bell,
-  CheckCircle2,
-  ChevronRight,
-  Cloud,
-  Database,
-  Inbox,
-  Moon,
-  PanelLeft,
-  RefreshCcw,
+  ChevronDown,
+  LogIn,
+  LogOut,
   Search,
-  Server,
   Settings,
-  ShieldCheck,
-  Sun,
-  TerminalSquare,
+  User,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { Route, Routes } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { checkAvailability, getCurrentUser, login, register, type AuthUser } from '../api/auth';
 import { useHealthQuery } from '../features/health/use-health-query';
 import { useAppStore } from '../store/app-store';
+import { useAuthStore } from '../store/auth-store';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+} from '../components/ui/command';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
+import { Input } from '../components/ui/input';
 import { cn } from '../lib/utils';
 
-const navItems = [
-  { label: 'Inbox', icon: Inbox },
-  { label: 'Overview', icon: Activity, active: true },
-  { label: 'Services', icon: Server },
-  { label: 'Database', icon: Database },
-  { label: 'Deployments', icon: Cloud },
-  { label: 'Settings', icon: Settings },
-];
-
-const themeOptions = [
-  { mode: 'system' as const, label: 'System', icon: PanelLeft },
-  { mode: 'light' as const, label: 'Light', icon: Sun },
-  { mode: 'dark' as const, label: 'Dark', icon: Moon },
-];
-
-const foundations = [
-  'Go Fiber API',
-  'React + Vite',
-  'TanStack Query',
-  'Zustand store',
-  'Docker Compose',
-  'Postgres ready',
-];
+const totalRegisterSteps = 5;
 
 export function App() {
-  return (
-    <Routes>
-      <Route path="/" element={<Dashboard />} />
-    </Routes>
-  );
-}
-
-function Dashboard() {
-  const healthQuery = useHealthQuery();
   const themeMode = useAppStore((state) => state.themeMode);
-  const setThemeMode = useAppStore((state) => state.setThemeMode);
-  const apiStatus = healthQuery.isLoading
-    ? 'Checking'
-    : healthQuery.isError
-      ? 'Offline'
-      : healthQuery.data?.status.toUpperCase();
+  const clearExpiredSession = useAuthStore((state) => state.clearExpiredSession);
+
+  useEffect(() => {
+    clearExpiredSession();
+  }, [clearExpiredSession]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -84,256 +61,570 @@ function Dashboard() {
   }, [themeMode]);
 
   return (
-    <main className="min-h-screen bg-[#fbfaf8] text-[#37352f] transition-colors dark:bg-[#11100e] dark:text-[#f4f1ea]">
-      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[252px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-[#ebe5dc] bg-[#f7f4ef] px-3 py-4 dark:border-[#2a261f] dark:bg-[#161410] lg:block">
-          <div className="flex h-full flex-col">
-            <div className="flex items-center gap-3 px-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#2f6f68] text-sm font-semibold text-white">
-                R
-              </div>
-              <div>
-                <p className="text-sm font-semibold leading-none">ReSy</p>
-                <p className="mt-1 text-xs text-[#8c8378] dark:text-[#a59b8f]">Production workspace</p>
-              </div>
-            </div>
+    <Routes>
+      <Route path="/" element={<ProtectedDashboard />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
 
-            <nav className="mt-7 space-y-0.5">
-              {navItems.map((item) => (
-                <button
-                  key={item.label}
-                  className={cn(
-                    'flex h-8 w-full cursor-pointer items-center gap-2.5 rounded-md border border-transparent px-2.5 text-left text-sm transition duration-150 ease-out active:scale-[0.99]',
-                    item.active
-                      ? 'border-[#d6e7e3] bg-[#e8f2ef] text-[#2f6f68] dark:border-[#294943] dark:bg-[#172724] dark:text-[#9ed7cf]'
-                      : 'text-[#6b645c] hover:border-[#e9e0d6] hover:bg-[#f0ebe3] hover:text-[#37352f] dark:text-[#b7afa4] dark:hover:border-[#312c25] dark:hover:bg-[#23201b] dark:hover:text-[#f4f1ea]',
-                  )}
-                  type="button"
-                >
-                  <item.icon size={16} />
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </nav>
+function ProtectedDashboard() {
+  const token = useAuthStore((state) => state.token);
+  const user = useAuthStore((state) => state.user);
+  const expiresAt = useAuthStore((state) => state.expiresAt);
+  const setUser = useAuthStore((state) => state.setUser);
+  const logout = useAuthStore((state) => state.logout);
+  const location = useLocation();
 
-            <div className="mt-auto rounded-lg border border-[#ebe5dc] bg-[#fbfaf8] p-3 dark:border-[#2a261f] dark:bg-[#191815]">
-              <div className="flex items-center gap-2">
-                <ShieldCheck size={16} className="text-[#2f6f68] dark:text-[#9ed7cf]" />
-                <p className="text-sm font-medium">Local stack</p>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-[#8c8378] dark:text-[#a59b8f]">
-                Frontend, API, and Postgres are ready to run from one production compose file.
-              </p>
-            </div>
-          </div>
-        </aside>
+  const meQuery = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: () => getCurrentUser(token ?? ''),
+    enabled: Boolean(token) && Boolean(expiresAt && expiresAt > Date.now()),
+    retry: false,
+  });
 
-        <section className="flex min-w-0 flex-col">
-          <header className="sticky top-0 z-10 border-b border-[#ebe5dc] bg-[#fbfaf8]/95 px-4 py-3 dark:border-[#2a261f] dark:bg-[#11100e]/95 sm:px-6">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <button
-                  className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-transparent bg-[#f4f0e9] text-[#6b645c] shadow-[inset_0_0_0_1px_rgba(55,53,47,0.035)] transition active:scale-[0.98] dark:bg-[#211e19] dark:text-[#b7afa4] dark:shadow-[inset_0_0_0_1px_rgba(244,241,234,0.045)] lg:hidden"
-                  type="button"
-                  aria-label="Open navigation"
-                >
-                  <PanelLeft size={17} />
-                </button>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-xs text-[#8c8378] dark:text-[#a59b8f]">
-                    <span>Workspace</span>
-                    <ChevronRight size={13} />
-                    <span>Overview</span>
-                  </div>
-                  <h1 className="mt-1 text-2xl font-semibold tracking-normal text-[#37352f] dark:text-[#f4f1ea] sm:text-3xl">
-                    System dashboard
-                  </h1>
-                </div>
-              </div>
+  useEffect(() => {
+    if (meQuery.data) {
+      setUser(meQuery.data);
+    }
+  }, [meQuery.data, setUser]);
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <div className="flex h-9 min-w-0 items-center gap-2 rounded-md border border-transparent bg-[#f4f0e9] px-3 text-sm text-[#8c8378] shadow-[inset_0_0_0_1px_rgba(55,53,47,0.03)] transition duration-150 ease-out hover:bg-[#f0ebe3] dark:bg-[#211e19] dark:text-[#a59b8f] dark:shadow-[inset_0_0_0_1px_rgba(244,241,234,0.035)] dark:hover:bg-[#26221d] sm:w-72">
-                  <Search size={16} />
-                  <span className="truncate">Search services, logs, settings</span>
-                </div>
-                <div className="flex items-center rounded-md border border-transparent bg-[#f4f0e9] p-0.5 shadow-[inset_0_0_0_1px_rgba(55,53,47,0.03)] dark:bg-[#211e19] dark:shadow-[inset_0_0_0_1px_rgba(244,241,234,0.035)]">
-                  {themeOptions.map((option) => (
-                    <button
-                      key={option.mode}
-                      className={cn(
-                        'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-[5px] border border-transparent px-2.5 text-xs font-medium transition duration-150 ease-out active:scale-[0.98]',
-                        themeMode === option.mode
-                          ? 'bg-[#fffefd] text-[#2f6f68] shadow-[0_1px_2px_rgba(55,53,47,0.05)] dark:bg-[#20312d] dark:text-[#9ed7cf] dark:shadow-[0_1px_2px_rgba(0,0,0,0.16)]'
-                          : 'text-[#8c8378] hover:bg-[#eee8df] hover:text-[#37352f] dark:text-[#a59b8f] dark:hover:bg-[#2a261f] dark:hover:text-[#f4f1ea]',
-                      )}
-                      type="button"
-                      onClick={() => setThemeMode(option.mode)}
-                      aria-pressed={themeMode === option.mode}
-                    >
-                      <option.icon size={14} />
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <Button size="icon" variant="secondary" aria-label="Notifications">
-                  <Bell size={16} />
-                </Button>
-              </div>
-            </div>
-          </header>
+  useEffect(() => {
+    if (meQuery.isError || (expiresAt && expiresAt <= Date.now())) {
+      logout();
+    }
+  }, [expiresAt, logout, meQuery.isError]);
 
-          <div className="flex-1 px-4 py-5 sm:px-6 xl:px-8">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Card className="overflow-hidden">
-                  <CardHeader className="border-b border-[#ebe5dc] bg-white px-5 py-4 dark:border-[#2a261f] dark:bg-[#191815]">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <CardTitle>Runtime health</CardTitle>
-                        <CardDescription>Live response from the Go Fiber API.</CardDescription>
-                      </div>
-                      <Button
-                        variant="secondary"
-                        onClick={() => void healthQuery.refetch()}
-                        disabled={healthQuery.isFetching}
-                      >
-                        <RefreshCcw size={16} />
-                        Refresh
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="grid divide-y divide-[#ebe5dc] dark:divide-[#2a261f] md:grid-cols-3 md:divide-x md:divide-y-0">
-                      <Metric
-                        icon={Activity}
-                        label="API status"
-                        value={apiStatus ?? 'Unknown'}
-                        tone={healthQuery.isError ? 'red' : 'emerald'}
-                      />
-                      <Metric
-                        icon={TerminalSquare}
-                        label="Environment"
-                        value={healthQuery.data?.environment ?? 'production'}
-                        tone="sky"
-                      />
-                      <Metric icon={Database} label="Database" value="Docker Postgres" tone="amber" />
-                    </div>
-                    <div className="border-t border-[#ebe5dc] p-5 dark:border-[#2a261f]">
-                      <div className="flex items-start gap-3 rounded-lg bg-[#f7f4ef] p-4 dark:bg-[#211e19]">
-                        <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-white text-[#6b645c] ring-1 ring-[#ebe5dc] dark:bg-[#191815] dark:text-[#b7afa4] dark:ring-[#2a261f]">
-                          <Server size={16} />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium">
-                            {healthQuery.isError
-                              ? 'Backend unavailable'
-                              : healthQuery.data?.service ?? 'ReSy API service'}
-                          </p>
-                          <p className="mt-1 text-sm leading-6 text-[#8c8378] dark:text-[#a59b8f]">
-                            {healthQuery.isError
-                              ? healthQuery.error.message
-                              : 'The app shell is wired for local development and production Docker deployment.'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+  if (!token || !expiresAt || expiresAt <= Date.now()) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
 
-              <Card>
-                <CardHeader className="px-5 py-4">
-                  <CardTitle>Release posture</CardTitle>
-                  <CardDescription>Production basics in place.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 px-5 pb-5">
-                  {foundations.map((item) => (
-                    <div key={item} className="flex items-center gap-3 text-sm">
-                      <CheckCircle2 size={16} className="text-[#2f6f68] dark:text-[#9ed7cf]" />
-                      <span className="text-[#5f5a52] dark:text-[#d8d0c6]">{item}</span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
+  return <Dashboard currentUser={meQuery.data ?? user} onLogout={logout} />;
+}
 
-            <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <InfoPanel
-                icon={Cloud}
-                title="Frontend gateway"
-                eyebrow="Nginx"
-                body="Static React assets are served by Nginx, with `/api` proxied internally to the backend service."
-              />
-              <InfoPanel
-                icon={Server}
-                title="Backend service"
-                eyebrow="Go Fiber"
-                body="The API runs as a compiled Linux binary and receives production env through Docker Compose."
-              />
-              <InfoPanel
-                icon={Database}
-                title="Postgres storage"
-                eyebrow="Docker volume"
-                body="Postgres 16 uses a named volume, so container restarts do not wipe application data."
-              />
-            </div>
-          </div>
-        </section>
-      </div>
+type DashboardProps = {
+  currentUser: AuthUser | null;
+  onLogout: () => void;
+};
+
+function LoginPage() {
+  const token = useAuthStore((state) => state.token);
+  const setSession = useAuthStore((state) => state.setSession);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const loginMutation = useMutation({
+    mutationFn: () =>
+      login({
+        email: email.trim().toLowerCase(),
+        password,
+      }),
+    onSuccess: (session) => {
+      setSession(session.token, session.user);
+    },
+  });
+
+  if (token) {
+    return <Navigate to="/" replace />;
+  }
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    loginMutation.mutate();
+  };
+
+  return (
+    <main className="grid min-h-screen place-items-center bg-[#fbfaf8] px-4 text-[#37352f] dark:bg-[#11100e] dark:text-[#f4f1ea]">
+      <section className="w-full max-w-[340px]">
+        <LogoMark className="mx-auto mb-5" />
+        <h1 className="mb-7 text-center text-2xl font-semibold tracking-normal">ReSy</h1>
+
+        <form className="space-y-3" onSubmit={handleSubmit}>
+          <Field label="Email" htmlFor="login-email">
+            <Input
+              id="login-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+              disabled={loginMutation.isPending}
+              required
+            />
+          </Field>
+
+          <Field label="Password" htmlFor="login-password">
+            <Input
+              id="login-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              minLength={8}
+              disabled={loginMutation.isPending}
+              required
+            />
+          </Field>
+
+          {loginMutation.isError && <AuthError message={loginMutation.error.message} />}
+
+          <Button className="mt-1 w-full" type="submit" disabled={loginMutation.isPending}>
+            <LogIn size={16} />
+            {loginMutation.isPending ? 'Wait' : 'Login'}
+          </Button>
+        </form>
+
+        <p className="mt-5 text-center text-sm text-[#8c8378] dark:text-[#a59b8f]">
+          New here?{' '}
+          <Link className="font-medium text-[#2f6f68] hover:text-[#285f59] dark:text-[#9ed7cf]" to="/register">
+            Register
+          </Link>
+        </p>
+      </section>
     </main>
   );
 }
 
-type MetricProps = {
-  icon: typeof Activity;
-  label: string;
-  value: string;
-  tone: 'emerald' | 'sky' | 'amber' | 'red';
-};
+function RegisterPage() {
+  const token = useAuthStore((state) => state.token);
+  const setSession = useAuthStore((state) => state.setSession);
+  const [step, setStep] = useState(0);
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameEdited, setUsernameEdited] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-function Metric({ icon: Icon, label, value, tone }: MetricProps) {
-  const toneClass = {
-    emerald: 'bg-[#edf7ed] text-[#2f7d32] ring-[#d6ead6] dark:bg-[#17301b] dark:text-[#8fd694] dark:ring-[#254b2a]',
-    sky: 'bg-[#eef4f8] text-[#34708d] ring-[#d8e8f0] dark:bg-[#142933] dark:text-[#8fc8df] dark:ring-[#254453]',
-    amber: 'bg-[#faf1df] text-[#9a6500] ring-[#efdcb6] dark:bg-[#332514] dark:text-[#e0b15a] dark:ring-[#57401f]',
-    red: 'bg-[#f3e9e4] text-[#9a483a] ring-[#ead7cf] dark:bg-[#321f1a] dark:text-[#e0a396] dark:ring-[#55342c]',
-  }[tone];
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedUsername = username.trim().toLowerCase();
+  const debouncedEmail = useDebouncedValue(normalizedEmail, 450);
+  const debouncedUsername = useDebouncedValue(normalizedUsername, 450);
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  const isDebouncedEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail);
+  const usernameFromEmail = normalizedEmail.split('@')[0]?.replace(/[^a-z0-9._-]/g, '') ?? '';
+  const isEmailSettling = normalizedEmail !== debouncedEmail;
+  const isUsernameSettling = normalizedUsername !== debouncedUsername;
+
+  const emailAvailabilityQuery = useQuery({
+    queryKey: ['auth', 'availability', 'email', debouncedEmail],
+    queryFn: () => checkAvailability({ email: debouncedEmail }),
+    enabled: step === 1 && isDebouncedEmailValid,
+    retry: false,
+  });
+
+  const usernameAvailabilityQuery = useQuery({
+    queryKey: ['auth', 'availability', 'username', debouncedUsername],
+    queryFn: () => checkAvailability({ username: debouncedUsername }),
+    enabled: step === 2 && debouncedUsername !== '',
+    retry: false,
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: () =>
+      register({
+        name: name.trim(),
+        username: username.trim().toLowerCase(),
+        email: email.trim().toLowerCase(),
+        password,
+      }),
+    onSuccess: (session) => {
+      setSession(session.token, session.user);
+    },
+  });
+
+  const handleEmailChange = useCallback((value: string) => {
+    setEmail(value.toLowerCase());
+
+    const nextEmail = value.trim().toLowerCase();
+    const nextEmailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail);
+    const nextUsername = nextEmail.split('@')[0]?.replace(/[^a-z0-9._-]/g, '') ?? '';
+
+    if (nextEmailIsValid && nextUsername !== '' && !usernameEdited) {
+      setUsername(nextUsername);
+    }
+  }, [usernameEdited]);
+
+  const steps = useMemo(
+    () => [
+      {
+        title: 'Name',
+        label: 'Your name',
+        value: name,
+        setValue: setName,
+        inputType: 'text',
+        autoComplete: 'name',
+        isValid: name.trim() !== '',
+      },
+      {
+        title: 'Email',
+        label: 'Email',
+        value: email,
+        setValue: handleEmailChange,
+        inputType: 'email',
+        autoComplete: 'email',
+        isValid:
+          isEmailValid &&
+          !isEmailSettling &&
+          emailAvailabilityQuery.data?.emailAvailable === true,
+        helper:
+          email.trim() === ''
+            ? undefined
+            : !isEmailValid
+              ? 'Enter a valid email.'
+              : isEmailSettling || emailAvailabilityQuery.isFetching
+                ? 'Checking email...'
+                : emailAvailabilityQuery.data?.emailAvailable === false
+                  ? 'Email already exists.'
+                  : emailAvailabilityQuery.data?.emailAvailable === true
+                    ? 'Email available.'
+                    : undefined,
+        helperTone:
+          emailAvailabilityQuery.data?.emailAvailable === false || (email.trim() !== '' && !isEmailValid)
+            ? 'error'
+            : 'success',
+      },
+      {
+        title: 'Username',
+        label: 'Username',
+        value: username,
+        setValue: (value: string) => {
+          setUsernameEdited(true);
+          setUsername(value.toLowerCase().replace(/\s+/g, ''));
+        },
+        inputType: 'text',
+        autoComplete: 'username',
+        isValid:
+          normalizedUsername !== '' &&
+          !isUsernameSettling &&
+          usernameAvailabilityQuery.data?.usernameAvailable === true,
+        helper:
+          normalizedUsername === ''
+            ? usernameFromEmail
+              ? `Suggestion: ${usernameFromEmail}`
+              : undefined
+            : isUsernameSettling || usernameAvailabilityQuery.isFetching
+              ? 'Checking username...'
+              : usernameAvailabilityQuery.data?.usernameAvailable === false
+                ? 'Username taken.'
+                : usernameAvailabilityQuery.data?.usernameAvailable === true
+                  ? 'Username available.'
+                  : undefined,
+        helperTone: usernameAvailabilityQuery.data?.usernameAvailable === false ? 'error' : 'success',
+      },
+      {
+        title: 'Password',
+        label: 'Password',
+        value: password,
+        setValue: setPassword,
+        inputType: 'password',
+        autoComplete: 'new-password',
+        isValid: password.length >= 8,
+        helper: password !== '' && password.length < 8 ? 'Use at least 8 characters.' : undefined,
+        helperTone: 'error',
+      },
+    ],
+    [
+      email,
+      emailAvailabilityQuery.data?.emailAvailable,
+      emailAvailabilityQuery.isFetching,
+      isEmailSettling,
+      isEmailValid,
+      isUsernameSettling,
+      name,
+      normalizedUsername,
+      password,
+      username,
+      usernameAvailabilityQuery.data?.usernameAvailable,
+      usernameAvailabilityQuery.isFetching,
+      usernameFromEmail,
+      handleEmailChange,
+    ],
+  );
+
+  if (token) {
+    return <Navigate to="/" replace />;
+  }
+
+  const isReviewStep = step === steps.length;
+  const currentStep = steps[step];
+  const canContinue = isReviewStep || currentStep.isValid;
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!isReviewStep) {
+      setStep((current) => current + 1);
+      registerMutation.reset();
+      return;
+    }
+
+    registerMutation.mutate();
+  };
 
   return (
-    <div className="p-5">
-      <div className={cn('flex h-9 w-9 items-center justify-center rounded-md ring-1', toneClass)}>
-        <Icon size={17} />
-      </div>
-      <p className="mt-4 text-xs font-medium uppercase text-[#8c8378] dark:text-[#a59b8f]">{label}</p>
-      <p className="mt-1 text-lg font-semibold tracking-normal">{value}</p>
+    <main className="min-h-screen bg-[#fbfaf8] px-4 py-5 text-[#37352f] dark:bg-[#11100e] dark:text-[#f4f1ea] sm:px-6">
+      <header className="flex items-center justify-between">
+        <Link className="flex items-center gap-2.5" to="/login">
+          <LogoMark />
+          <span className="text-sm font-semibold">ReSy</span>
+        </Link>
+        <Link className="text-sm font-medium text-[#2f6f68] dark:text-[#9ed7cf]" to="/login">
+          Login
+        </Link>
+      </header>
+
+      <section className="grid min-h-[calc(100vh-76px)] items-center py-8 lg:grid-cols-[minmax(0,0.52fr)_minmax(0,0.48fr)]">
+        <form className="w-full max-w-[390px] lg:ml-[8vw]" onSubmit={handleSubmit}>
+          {!isReviewStep ? (
+            <>
+              <p className="text-sm font-medium text-[#8c8378] dark:text-[#a59b8f]">
+                Step {step + 1} of {totalRegisterSteps}
+              </p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-normal">{currentStep.title}</h1>
+              <div className="mt-7 space-y-3">
+                <Field label={currentStep.label} htmlFor={`register-${currentStep.title.toLowerCase()}`}>
+                  <Input
+                    id={`register-${currentStep.title.toLowerCase()}`}
+                    type={currentStep.inputType}
+                    value={currentStep.value}
+                    onChange={(event) => currentStep.setValue(event.target.value)}
+                    autoComplete={currentStep.autoComplete}
+                    minLength={currentStep.inputType === 'password' ? 8 : undefined}
+                    disabled={registerMutation.isPending}
+                    autoFocus
+                    required
+                  />
+                </Field>
+                {'helper' in currentStep && currentStep.helper ? (
+                  <p
+                    className={cn(
+                      'text-sm',
+                      currentStep.helperTone === 'error'
+                        ? 'text-[#b84a3c]'
+                        : 'text-[#2f6f68] dark:text-[#9ed7cf]',
+                    )}
+                  >
+                    {currentStep.helper}
+                  </p>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-[#8c8378] dark:text-[#a59b8f]">
+                Step {totalRegisterSteps} of {totalRegisterSteps}
+              </p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-normal">Review</h1>
+              <div className="mt-7 divide-y divide-[#ebe5dc] rounded-md border border-[#ebe5dc] bg-white dark:divide-[#2a261f] dark:border-[#2a261f] dark:bg-[#191815]">
+                <ReviewRow label="Name" value={name.trim()} />
+                <ReviewRow label="Username" value={username.trim()} />
+                <ReviewRow label="Email" value={email.trim().toLowerCase()} />
+              </div>
+            </>
+          )}
+
+          {registerMutation.isError && (
+            <div className="mt-4">
+              <AuthError message={registerMutation.error.message} />
+            </div>
+          )}
+
+          <div className="mt-7 flex items-center justify-between">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={step === 0 || registerMutation.isPending}
+              onClick={() => {
+                setStep((current) => Math.max(0, current - 1));
+                registerMutation.reset();
+              }}
+            >
+              Back
+            </Button>
+            <Button type="submit" disabled={!canContinue || registerMutation.isPending}>
+              {registerMutation.isPending ? 'Creating' : isReviewStep ? 'Create account' : 'Next'}
+            </Button>
+          </div>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function Dashboard({ currentUser, onLogout }: DashboardProps) {
+  const healthQuery = useHealthQuery();
+  const [commandOpen, setCommandOpen] = useState(false);
+  const displayName = currentUser?.name || currentUser?.username || currentUser?.email || 'User';
+  const apiStatus = healthQuery.isLoading
+    ? 'Checking'
+    : healthQuery.isError
+      ? 'Offline'
+      : (healthQuery.data?.status.toUpperCase() ?? 'Online');
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen((open) => !open);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  return (
+    <main className="min-h-screen bg-[#fbfaf8] text-[#37352f] dark:bg-[#11100e] dark:text-[#f4f1ea]">
+      <header className="grid h-16 grid-cols-[1fr_minmax(180px,520px)_1fr] items-center gap-3 border-b border-[#ebe5dc] px-4 dark:border-[#2a261f] sm:px-6">
+        <div className="justify-self-start">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex h-9 items-center gap-2 rounded-md bg-[#f4f0e9] px-2.5 text-sm text-[#5f5a52] shadow-[inset_0_0_0_1px_rgba(55,53,47,0.03)] transition hover:bg-[#f0ebe3] dark:bg-[#211e19] dark:text-[#d8d0c6] dark:hover:bg-[#26221d]"
+                type="button"
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#2f6f68] text-xs font-semibold text-white">
+                  {displayName.charAt(0).toUpperCase()}
+                </span>
+                <ChevronDown size={14} className="hidden sm:block" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              <DropdownMenuLabel className="truncate">{displayName}</DropdownMenuLabel>
+              {currentUser?.email ? (
+                <DropdownMenuLabel className="truncate pt-0 text-xs font-normal text-muted-foreground">
+                  {currentUser.email}
+                </DropdownMenuLabel>
+              ) : null}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <Settings size={16} />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={onLogout}>
+                <LogOut size={16} />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <button
+          className="flex h-9 min-w-0 items-center gap-2 rounded-md bg-[#f4f0e9] px-3 text-left text-sm text-[#8c8378] shadow-[inset_0_0_0_1px_rgba(55,53,47,0.03)] transition hover:bg-[#f0ebe3] dark:bg-[#211e19] dark:text-[#a59b8f] dark:hover:bg-[#26221d]"
+          type="button"
+          onClick={() => setCommandOpen(true)}
+        >
+          <Search size={16} />
+          <span className="min-w-0 flex-1 truncate">Search</span>
+          <kbd className="hidden rounded bg-white px-1.5 py-0.5 text-[11px] text-[#8c8378] dark:bg-[#191815] dark:text-[#a59b8f] sm:inline">
+            Ctrl K
+          </kbd>
+        </button>
+
+        <Link className="flex items-center gap-2 justify-self-end" to="/">
+          <span className="hidden text-sm font-semibold sm:inline">ReSy</span>
+          <LogoMark />
+        </Link>
+      </header>
+
+      <section className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <SimpleMetric label="API" value={apiStatus} />
+          <SimpleMetric label="User" value={displayName} />
+          <SimpleMetric label="Session" value="7 days" />
+        </div>
+      </section>
+
+      <CommandDialog open={commandOpen} onOpenChange={setCommandOpen} title="Search">
+        <CommandInput placeholder="Search ReSy..." />
+        <CommandList>
+          <CommandEmpty>No results.</CommandEmpty>
+          <CommandGroup heading="Actions">
+            <CommandItem onSelect={() => setCommandOpen(false)}>
+              <User size={16} />
+              Profile
+            </CommandItem>
+            <CommandItem onSelect={() => setCommandOpen(false)}>
+              <Settings size={16} />
+              Settings
+            </CommandItem>
+            <CommandItem onSelect={onLogout}>
+              <LogOut size={16} />
+              Logout
+              <CommandShortcut>Exit</CommandShortcut>
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
+    </main>
+  );
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedValue(value), delayMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
+
+function LogoMark({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        'flex h-8 w-8 items-center justify-center rounded-md bg-[#2f6f68] text-sm font-semibold text-white',
+        className,
+      )}
+    >
+      R
+    </span>
+  );
+}
+
+function ReviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-3 py-2.5">
+      <p className="text-xs text-[#8c8378] dark:text-[#a59b8f]">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium">{value}</p>
     </div>
   );
 }
 
-type InfoPanelProps = {
-  icon: typeof Cloud;
-  eyebrow: string;
-  title: string;
-  body: string;
+function SimpleMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-[#ebe5dc] bg-white px-4 py-3 dark:border-[#2a261f] dark:bg-[#191815]">
+      <p className="text-xs text-[#8c8378] dark:text-[#a59b8f]">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function AuthError({ message }: { message: string }) {
+  return (
+    <p className="rounded-md bg-[#f3e9e4] px-3 py-2 text-sm text-[#9a483a] ring-1 ring-[#ead7cf] dark:bg-[#321f1a] dark:text-[#e0a396] dark:ring-[#55342c]">
+      {message}
+    </p>
+  );
+}
+
+type FieldProps = {
+  label: string;
+  htmlFor: string;
+  children: ReactNode;
 };
 
-function InfoPanel({ icon: Icon, eyebrow, title, body }: InfoPanelProps) {
+function Field({ label, htmlFor, children }: FieldProps) {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium uppercase text-[#8c8378] dark:text-[#a59b8f]">{eyebrow}</span>
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#f0ece5] text-[#6b645c] dark:bg-[#23201b] dark:text-[#b7afa4]">
-            <Icon size={16} />
-          </span>
-        </div>
-        <h2 className="mt-5 text-base font-semibold tracking-normal">{title}</h2>
-        <p className="mt-2 text-sm leading-6 text-[#8c8378] dark:text-[#a59b8f]">{body}</p>
-      </CardContent>
-    </Card>
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium text-[#5f5a52] dark:text-[#d8d0c6]" htmlFor={htmlFor}>
+        {label}
+      </label>
+      {children}
+    </div>
   );
 }

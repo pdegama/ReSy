@@ -29,7 +29,7 @@ func NewServer(cfg config.Config) *fiber.App {
 
 	api := app.Group("/api")
 	handlers.RegisterHealthRoutes(api, cfg)
-	handlers.RegisterAppRoutes(api)
+	handlers.RegisterAppRoutes(api, cfg)
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{

@@ -1,0 +1,12 @@
+- in register page move stape before form not above.
+- also i login link in fist step
+- in register page add some design in right side but make sure sidbar is floathing not joined in corner
+- green to blue
+- move resy to left and user icon in to right side
+- also commander popup border are white look like a ship fix them
+- also shadcn commander
+- i think add pop up like dropdown and other border is white look like very shit
+- also add theme change option in commander
+- also add aleret when user want to logout 
+- mobile frandly make sure
+- create setting page for change name, also profile pics create one api for store phone in dir also, add volume in docker file for store

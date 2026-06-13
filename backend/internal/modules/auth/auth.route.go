@@ -1,8 +1,15 @@
 package auth
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"resy/backend/internal/config"
 
-func RegisterUserRouts(router fiber.Router) {
+	"github.com/gofiber/fiber/v2"
+)
+
+func RegisterUserRouts(router fiber.Router, cfg config.Config) {
 	auth := router.Group("/auth")
-	auth.Get("/", testAuth)
+	auth.Get("/availability", availabilityHandler)
+	auth.Post("/register", registerHandler(cfg))
+	auth.Post("/login", loginHandler(cfg))
+	auth.Get("/me", requireAuth(cfg), meHandler)
 }

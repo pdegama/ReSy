@@ -16,16 +16,17 @@ export const useAppStore = create<AppState>()(
     persist(
       (set) => ({
         sidebarOpen: true,
-        themeMode: 'system',
+        themeMode: 'dark',
         setSidebarOpen: (open) => set({ sidebarOpen: open }),
         toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
         setThemeMode: (mode) => set({ themeMode: mode }),
       }),
       {
         name: 'resy-app-store',
+        version: 1,
+        migrate: () => ({ themeMode: 'dark' as ThemeMode }),
         partialize: (state) => ({ themeMode: state.themeMode }),
       },
     ),
   ),
 );
-

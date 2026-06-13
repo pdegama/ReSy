@@ -19,3 +19,11 @@ func ConnectWithDB(conf config.Config) {
 	}
 	db = _db
 }
+
+func GetDB() *gorm.DB {
+	if db == nil {
+		panic("database is not connected")
+	}
+
+	return db
+}
