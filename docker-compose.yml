@@ -1,0 +1,54 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api
+    image: resy-frontend:prod
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    image: resy-backend:prod
+    environment:
+      APP_NAME: ${APP_NAME:-ReSy API}
+      APP_ENV: production
+      APP_PORT: 8080
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      DATABASE_URL: postgres://${POSTGRES_USER:-resy}:${POSTGRES_PASSWORD:-resy_password}@postgres:5432/${POSTGRES_DB:-resy}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-resy}
+      POSTGRES_USER: ${POSTGRES_USER:-resy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-resy_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
